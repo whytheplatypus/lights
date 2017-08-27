@@ -7,9 +7,21 @@
   revision = "5f6efc7ef2759c81b7ba876593971bfce311eab3"
   version = "v4.0.0"
 
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/image"
+  packages = ["colornames"]
+  revision = "426cfd8eeb6e08ab1932954e09e3c2cb2bc6e36d"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/net"
+  packages = ["html","html/atom"]
+  revision = "57efc9c3d9f91fb3277f8da1cff370539c4d3dc5"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1e48f2f511b5161618815c40a3d04bf88f30ed084030a149793485266b23549c"
+  inputs-digest = "465ec993fbc4cee115e349847f926f98192ac8fe52d32dd0c28d286afa375740"
   solver-name = "gps-cdcl"
   solver-version = 1
