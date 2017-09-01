@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -13,7 +12,11 @@ import (
 	"golang.org/x/image/colornames"
 )
 
+var max int
+var min = 100000
+
 func main() {
+	// TODO select device from flag
 	device := "BY1636A24100115"
 	conn := lights.Conn
 	var m []int32
@@ -22,16 +25,17 @@ func main() {
 	}
 
 	fmt.Println(m)
+	max = int(m[0])
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		cf := scanner.Text()
-		fmt.Println(cf)
+		//fmt.Println(cf)
 		sbars := strings.Split(cf, ";")
 		ibars := make([]int, len(sbars))
 		for i, b := range sbars {
 			ib, err := strconv.Atoi(b)
 			if err != nil {
-				log.Printf("bad bar : %s : %s", b, err.Error())
+				//log.Printf("bad bar : %s : %s", b, err.Error())
 				continue
 			}
 			ibars[i] = ib
@@ -60,10 +64,26 @@ func render(bars []int, r, c int) *lights.Set {
 		}
 	}
 	for i, h := range bars {
-		//fmt.Println(i, h)
+		if h > max || (h < min && h > 0) {
+			if h > max {
+				fmt.Printf("update max %d", h)
+				fmt.Println("")
+				max = h
+			} else if h < min {
+				fmt.Printf("update min %d", h)
+				fmt.Println("")
+				min = h
+			}
+		}
+		h = int((float64(r) * float64(h-min)) / (float64(max) - float64(min)))
+		//fmt.Println(i, h, r, min, max)
 		//frame.Rows[h].Colors[i] = &lights.RGBA{colornames.Purple}
 		for ii := r - h; ii < r; ii++ {
-			frame.Rows[ii].Colors[i] = &lights.RGBA{colornames.Purple}
+			if ii >= 0 && ii < len(frame.Rows) && i >= 0 && i < len(frame.Rows[ii].Colors) {
+				frame.Rows[ii].Colors[i] = &lights.RGBA{colornames.Purple}
+			} else {
+				//log.Printf("out of bounds : %d : %d", ii, i)
+			}
 		}
 	}
 	return frame
