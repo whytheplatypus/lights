@@ -10,6 +10,7 @@ import (
 )
 
 var DeviceList []string
+var validDevices = map[string]struct{}{}
 var Conn *dbus.Conn
 
 func init() {
@@ -23,6 +24,14 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	for _, d := range DeviceList {
+		validDevices[d] = struct{}{}
+	}
+}
+
+func ValidDevice(d string) bool {
+	_, ok := validDevices[d]
+	return ok
 }
 
 type RGBA struct {
