@@ -4,19 +4,20 @@ import (
 	"bufio"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/godbus/dbus"
 	"github.com/whytheplatypus/lights"
 	"golang.org/x/image/colornames"
 )
 
-var max, r, c int
+var r, c int
+var max = []int{0}
 var min = 100000
 var device string
 var conn *dbus.Conn
@@ -49,13 +50,22 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println(m)
-	max = int(m[0])
+	//fmt.Println(m)
 	r = int(m[0])
 	c = int(m[1])
+
+	go func() {
+		for {
+			if len(max) > 1 {
+				max = max[:len(max)-1]
+			}
+			<-time.After(1 * time.Second)
+		}
+	}()
+
 	go run(in)
-	fmt.Println(cava.Start())
-	fmt.Println(cava.Wait())
+	cava.Start()
+	cava.Wait()
 }
 
 func run(in io.Reader) error {
@@ -95,18 +105,18 @@ func render(bars []int) *lights.Set {
 		}
 	}
 	for i, h := range bars {
-		if h > max || (h < min && h > 0) {
-			if h > max {
-				fmt.Printf("update max %d", h)
-				fmt.Println("")
-				max = h
+		if h > max[len(max)-1] || (h < min && h > 0) {
+			if h > max[len(max)-1] {
+				//fmt.Printf("update max %d", h)
+				//fmt.Println("")
+				max = append(max, h)
 			} else if h < min {
-				fmt.Printf("update min %d", h)
-				fmt.Println("")
+				//fmt.Printf("update min %d", h)
+				//fmt.Println("")
 				min = h
 			}
 		}
-		h = int((float64(r) * float64(h-min)) / (float64(max) - float64(min)))
+		h = int((float64(r) * float64(h-min)) / (float64(max[len(max)-1]) - float64(min)))
 		//fmt.Println(i, h, r, min, max)
 		//frame.Rows[h].Colors[i] = &lights.RGBA{colornames.Purple}
 		for ii := r - h; ii < r; ii++ {
