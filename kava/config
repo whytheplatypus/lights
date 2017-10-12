@@ -7,11 +7,11 @@
 ; mode = normal
  
 # Framerate Default: 60. Accepts only non-negative values.
-; framerate = 10 
+framerate = 10 
 
 # Sensitivity in  %. If you think the bars are to low/response is to little, try
 # increasing this value 200 means double height. Accepts only non-negative values.
-sensitivity = 75
+; sensitivity = 75
 
 # Autosens will attempt to decrease sensitivity if cava peaks. 1 = on, 0 = off
 # overshoot allows bars to overshoot (in % of terminal height) without initiating autosens
