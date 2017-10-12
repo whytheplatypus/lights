@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"image/color"
 	"io"
+	"log"
 
 	"github.com/godbus/dbus"
 )
@@ -104,7 +105,7 @@ func Apply(name string, conn *dbus.Conn, s *Set) {
 	buf := new(bytes.Buffer)
 	s.Encode(buf)
 
-	//fmt.Printf("% x", buf.Bytes())
+	log.Printf("%x", buf.Bytes())
 	// test := []byte{3, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 00, 00}
 	c := conn.Object("org.razer", dbus.ObjectPath("/org/razer/device/"+name)).Call("razer.device.lighting.chroma.setKeyRow", 0, buf.Bytes())
 	if c.Err != nil {
@@ -118,4 +119,65 @@ func SetCustom(name string, conn *dbus.Conn) {
 	if c.Err != nil {
 		panic(c.Err)
 	}
+}
+
+func SetReactive(name string, conn *dbus.Conn, color Color) {
+	rgb := color.RGB()
+	c := conn.Object("org.razer", dbus.ObjectPath("/org/razer/device/"+name)).Call("razer.device.lighting.chroma.setReactive", 0, rgb[0], rgb[1], rgb[2], uint8(1))
+	if c.Err != nil {
+		panic(c.Err)
+	}
+}
+
+func ClearCustom(name string, conn *dbus.Conn, color Color) {
+	var m []int32
+	if err := conn.Object("org.razer", dbus.ObjectPath("/org/razer/device/"+name)).Call("razer.device.misc.getMatrixDimensions", 0).Store(&m); err != nil {
+		panic(err)
+	}
+
+	//fmt.Println(m)
+	r := int(m[0])
+	c := int(m[1])
+
+	frame := &Set{
+		Rows: make([]*Row, r),
+	}
+	for i, _ := range frame.Rows {
+		frame.Rows[i] = &Row{
+			Num:    uint8(i),
+			Colors: make([]Color, c),
+		}
+		for k, _ := range frame.Rows[i].Colors {
+			frame.Rows[i].Colors[k] = color
+		}
+	}
+	Apply(name, conn, frame)
+	SetCustom(name, conn)
+}
+
+func SetBreathRandom(name string, conn *dbus.Conn) {
+
+	c := conn.Object("org.razer", dbus.ObjectPath("/org/razer/device/"+name)).Call("razer.device.lighting.chroma.setBreathRandom", 0)
+	if c.Err != nil {
+		panic(c.Err)
+	}
+}
+
+func GetDeviceName(name string, conn *dbus.Conn) (string, error) {
+	var s string
+	c := conn.Object("org.razer", dbus.ObjectPath("/org/razer/device/"+name)).Call("razer.device.misc.getDeviceName", 0)
+	c.Store(&s)
+	return s, c.Err
+}
+
+func GetMatrixDimensions(name string, conn *dbus.Conn) ([]int32, error) {
+	var m []int32
+	err := conn.Object(
+		"org.razer",
+		dbus.ObjectPath("/org/razer/device/"+name),
+	).Call(
+		"razer.device.misc.getMatrixDimensions",
+		0,
+	).Store(&m)
+	return m, err
 }
