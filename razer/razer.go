@@ -1,4 +1,4 @@
-package lights
+package razer
 
 import (
 	"bytes"
@@ -104,7 +104,7 @@ func Apply(name string, conn *dbus.Conn, s *Set) {
 
 	buf := new(bytes.Buffer)
 	s.Encode(buf)
-
+	log.Println("%+v", s)
 	log.Printf("%x", buf.Bytes())
 	// test := []byte{3, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 255, 00, 255, 00, 00}
 	c := conn.Object("org.razer", dbus.ObjectPath("/org/razer/device/"+name)).Call("razer.device.lighting.chroma.setKeyRow", 0, buf.Bytes())

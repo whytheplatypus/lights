@@ -1,5 +1,5 @@
 SOURCE_DIR=.
-BIN_NAME='kava'
+BIN_NAME='lights'
 PACKAGE_NAME=$(shell go list $(SOURCE_DIR))
 PACKAGES=$(shell go list ./... | grep -v '^$(PACKAGE)/vendor/')
 SOURCES=$(shell find $(SOURCE_DIR) -name '*.go')
@@ -10,7 +10,6 @@ all: build
 # get tools needed for running other targets
 tools: go-lint
 	go get -u github.com/kardianos/govendor
-	go get -u github.com/jteeuwen/go-bindata/...
 	go get -u github.com/kisielk/godepgraph
 
 go-lint:
@@ -29,7 +28,6 @@ build: $(BIN_NAME)
 
 # compile binary from sources
 $(BIN_NAME): $(SOURCES)
-	go-bindata config
 	go build -x -o $(BIN_NAME) -ldflags "\
 		-X $(PACKAGE_NAME)/version.BuildTime=$(shell date -u +%FT%T%z)\
 		-X $(PACKAGE_NAME)/version.GitCommit=$(shell git rev-parse --short HEAD)\
@@ -75,4 +73,4 @@ dep-graph.png: $(SOURCES)
 clean:
 	rm -f dep-graph.png
 
-.PHONY: all tools go-lint build gen_proto gen_migrations gen check-fmt format lint test dep_graph clean
+.PHONY: all tools go-lint build check-fmt format lint test dep_graph clean

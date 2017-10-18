@@ -1,17 +1,18 @@
-package lights_test
+package main
 
 import (
 	"flag"
+	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
 
-	"golang.org/x/image/colornames"
-
 	"github.com/BurntSushi/xgbutil"
 	"github.com/BurntSushi/xgbutil/keybind"
 	"github.com/BurntSushi/xgbutil/xevent"
-	"github.com/whytheplatypus/lights"
+	"github.com/whytheplatypus/lights/razer"
+	"golang.org/x/image/colornames"
 )
 
 var keyboard bool
@@ -22,17 +23,11 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestDevices(t *testing.T) {
-	if len(lights.DeviceList) < 1 {
-		t.Error("No devices present")
-	}
-	t.Log(lights.DeviceList)
-}
-
 func TestKeys(t *testing.T) {
 	if !keyboard {
-		t.Skip("Run with -i for interactive test")
+		t.Skip("Run with -keyboard for interactive test")
 	}
+	dev := razer.DeviceList[0]
 	evts := make(chan string, 1)
 	go func(evts chan string, t *testing.T) {
 		X, err := xgbutil.NewConn()
@@ -56,29 +51,17 @@ func TestKeys(t *testing.T) {
 			}).Connect(X, wID)
 		xevent.Main(X)
 	}(evts, t)
-	dev := lights.DeviceList[0]
-	defer lights.SetBreathRandom(dev, lights.Conn)
-	s, err := lights.GetDeviceName(dev, lights.Conn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, key := range lights.Keys {
-		locs := lights.Keyboards[s][key]
-		lights.ClearCustom(dev, lights.Conn, &lights.RGBA{colornames.Black})
-		s := &lights.Set{
-			Rows: []*lights.Row{},
+	out, in := io.Pipe()
+
+	go render(out)
+
+	defer razer.SetBreathRandom(dev, razer.Conn)
+	for _, key := range razer.Keys {
+		razer.ClearCustom(dev, razer.Conn, &razer.RGBA{colornames.Black})
+		_, err := fmt.Fprintln(in, fmt.Sprintf("%s:%s", key, "blue"))
+		if err != nil {
+			t.Fatal(err)
 		}
-		for _, loc := range locs {
-			s.Rows = append(s.Rows, &lights.Row{
-				Num:   loc.Row,
-				Start: loc.Col,
-				Colors: []lights.Color{
-					&lights.RGBA{colornames.Purple},
-				},
-			})
-		}
-		lights.Apply(dev, lights.Conn, s)
-		lights.SetCustom(dev, lights.Conn)
 		select {
 		case pressed := <-evts:
 			if pressed != key {
@@ -99,13 +82,5 @@ func TestKeys(t *testing.T) {
 			t.Error("Incomplete test")
 			return
 		}
-	}
-}
-
-func TestGetDeviceName(t *testing.T) {
-	dev := lights.DeviceList[0]
-	_, err := lights.GetDeviceName(dev, lights.Conn)
-	if err != nil {
-		t.Fatal(err)
 	}
 }
