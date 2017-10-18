@@ -1,4 +1,4 @@
-package lights
+package razer
 
 var Keys = []string{
 	"Escape",
