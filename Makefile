@@ -11,6 +11,7 @@ all: build
 tools: go-lint
 	go get -u github.com/kardianos/govendor
 	go get -u github.com/kisielk/godepgraph
+	go get -u github.com/whytheplatypus/godoc-templates
 
 go-lint:
 	$(eval GOLINT_INSTALLED := $(shell which golint))
@@ -67,6 +68,10 @@ dep_graph: dep-graph.png
 dep-graph.png: $(SOURCES)
 	godepgraph -s -p $(PACKAGE_NAME)/vendor $(PACKAGE_NAME) | dot -Tpng -o dep-graph.png
 
+docs:
+	@for pkg in $(PACKAGES); do \
+		godoc -notes ".*" -templates $$GOPATH/src/github.com/whytheplatypus/godoc-templates $$pkg | sed 's/\/target\///' | sed 's/(\\/(/' > $$GOPATH/src/$$pkg/README.md ; \
+	done
 # Cleanup targets
 # ----------------------------------------------------------------------------
 
