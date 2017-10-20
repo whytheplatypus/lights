@@ -3,6 +3,7 @@ BIN_NAME='lights'
 PACKAGE_NAME=$(shell go list $(SOURCE_DIR))
 PACKAGES=$(shell go list ./... | grep -v '^$(PACKAGE)/vendor/')
 SOURCES=$(shell find $(SOURCE_DIR) -name '*.go')
+BRANCH_NAME=$(shell git rev-parse --abbrev-ref HEAD)
 
 # default target, compile the code
 all: build
@@ -11,6 +12,7 @@ all: build
 tools: go-lint
 	go get -u github.com/kardianos/govendor
 	go get -u github.com/kisielk/godepgraph
+	go get -u github.com/whytheplatypus/godoc-templates
 
 go-lint:
 	$(eval GOLINT_INSTALLED := $(shell which golint))
@@ -67,6 +69,18 @@ dep_graph: dep-graph.png
 dep-graph.png: $(SOURCES)
 	godepgraph -s -p $(PACKAGE_NAME)/vendor $(PACKAGE_NAME) | dot -Tpng -o dep-graph.png
 
+docs:
+	@for pkg in $(PACKAGES); do \
+		godoc -templates $$GOPATH/src/github.com/whytheplatypus/godoc-templates $$pkg | sed 's/\/target\///' | sed 's/(\\/(/' > $$GOPATH/src/$$pkg/README.md ; \
+	done
+
+
+notes:
+	@for pkg in $(PACKAGES); do \
+		godoc -notes ".*" -templates $$GOPATH/src/github.com/whytheplatypus/godoc-templates/notes-only cmd/$$pkg | sed 's/\/src\/github.com\/whytheplatypus\/$(BIN_NAME)/\/whytheplatypus\/$(BIN_NAME)\/$(BRANCH_NAME)/' | sed 's/(\\/(/' >> $$GOPATH/src/$(PACKAGE_NAME)/NOTES.md ; \
+	done
+
+# sed 's/\/src\/$(PACKAGE_NAME)\//\/whytheplatypus\/$(BIN_NAME)\/blob\/$(BRANCH_NAME)\//'
 # Cleanup targets
 # ----------------------------------------------------------------------------
 

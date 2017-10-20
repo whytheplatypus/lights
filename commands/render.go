@@ -4,33 +4,28 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"image/color"
 	"io"
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/whytheplatypus/lights/razer"
-	"golang.org/x/image/colornames"
 )
 
 type Renderer struct{}
 
-func (r *Renderer) Run(args []string) int {
-	dev := razer.DeviceList[0]
-	defer razer.SetBreathRandom(dev, razer.Conn)
+func defaultKeyboard() string {
+	kbs := razer.GetKeyboards(razer.Conn)
+	if len(kbs) > 0 {
+		return kbs[0]
+	}
+	return ""
+}
 
-	sig := make(chan os.Signal)
-
-	//Setup signal handling for clean shutdown
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-
-	in := os.Stdin
-
+func (r *Renderer) Run(args []string) error {
 	rFlags := flag.NewFlagSet("renderer", flag.ContinueOnError)
+
 	var path string
 	rFlags.StringVar(
 		&path,
@@ -38,106 +33,95 @@ func (r *Renderer) Run(args []string) int {
 		os.Getenv("LIGHTS_FIFO"),
 		"specify path for a fifo, one will be created if it doesn't already exist at the path")
 
+	var dev string
+	rFlags.StringVar(
+		&dev,
+		"keyboard",
+		defaultKeyboard(),
+		fmt.Sprintf("specify the device id to render out to : \n %s", razer.DeviceList))
+
+	var preset string
+	rFlags.StringVar(
+		&preset,
+		"preset",
+		"reactive",
+		//TODO(preset-options) include options
+		"specify the preset effect to return to when render exits")
+
 	if err := rFlags.Parse(args); err != nil {
-		fmt.Println(err.Error())
-		return 1
+		return err
 	}
 
+	in, err := Input(path)
+	if err != nil {
+		return err
+	}
+
+	defer presets[preset](dev, razer.Conn)
+
+	pipe := make(chan *razer.Set, 100)
+	go renderLoop(dev, pipe)
+	go render(dev, pipe, in)
+
+	sig := Signal(syscall.SIGINT, syscall.SIGTERM)
+	<-sig
+	return nil
+}
+
+func Input(path string) (io.Reader, error) {
 	if path != "" {
 		os.Remove(path)
 		if err := syscall.Mkfifo(path, 0600); err != nil {
 			log.Println(err)
-			return 1
+			return nil, err
 		}
 		var err error
-		in, err = os.OpenFile(path, os.O_RDWR, 0600)
+		in, err := os.OpenFile(path, os.O_RDWR, 0600)
 		if err != nil {
 			log.Println(err)
-			return 1
+			return nil, err
 		}
+		// TODO(removeremove) can we not use these?
 		defer os.Remove(path)
+		return in, nil
 	}
-
-	go render(in)
-	<-sig
-	return 0
+	return os.Stdin, nil
 }
 
-func render(in io.Reader) {
-	dev := razer.DeviceList[0]
+func renderLoop(dev string, pipe <-chan *razer.Set) {
+	for s := range pipe {
+		razer.Apply(dev, razer.Conn, s)
+		razer.SetCustom(dev, razer.Conn)
+	}
+}
+
+func render(dev string, pipe chan *razer.Set, in io.Reader) {
+
 	dn, err := razer.GetDeviceName(dev, razer.Conn)
 	if err != nil {
 		log.Fatal(err)
 	}
-	keyboard := razer.Keyboards[dn]
-	pipe := make(chan *razer.Set, 100)
-	go func(pipe <-chan *razer.Set) {
-		for s := range pipe {
-			razer.Apply(dev, razer.Conn, s)
-			razer.SetCustom(dev, razer.Conn)
-		}
-	}(pipe)
+
+	keyboard, ok := razer.Keyboards[dn]
+	if !ok {
+		panic(fmt.Errorf("no keyboard found %s", dn))
+	}
+
 	// can configre to come from a fifo
 	scanner := bufio.NewScanner(in)
 	for scanner.Scan() {
+		// TODO(untangle) these 3 or 4 statements feel jumbled
 		line := scanner.Text()
 		if len(pipe) > 0 {
 			log.Println("[DEBUG] skipping", line)
 			continue
 		}
-		s := &razer.Set{
-			Rows: []*razer.Row{},
-		}
 		log.Println("[DEBUG]", line)
-		keys := strings.Split(line, ",")
-		for _, key := range keys {
-			parts := strings.Split(key, ":")
-			c, parts := parts[len(parts)-1], parts[:len(parts)-1]
-			crgba, ok := colornames.Map[c]
-			if !ok {
-				crgba, err = Hex(c, 3)
-				if err != nil {
-					log.Println("Could not render color", c)
-					log.Println(err)
-					continue
-				}
-			}
-			color := &razer.RGBA{crgba}
-
-			switch l := len(parts); l {
-			case 1:
-				if locs, ok := keyboard[parts[0]]; ok {
-					//set key
-					for _, loc := range locs {
-						s.Rows = append(s.Rows, &razer.Row{
-							Num:   loc.Row,
-							Start: loc.Col,
-							Colors: []razer.Color{
-								color,
-							},
-						})
-					}
-				}
-			case 2:
-				c, err := strconv.Atoi(parts[0])
-				if err != nil {
-					continue
-				}
-				r, err := strconv.Atoi(parts[1])
-				if err != nil {
-					continue
-				}
-
-				s.Rows = append(s.Rows, &razer.Row{
-					Num:   uint8(r),
-					Start: uint8(c),
-					Colors: []razer.Color{
-						color,
-					},
-				})
-			}
+		s := &razer.Set{}
+		if err := razer.UnmarshalString(line, keyboard, s); err != nil {
+			log.Println("[ERROR] ", err)
+			continue
 		}
-		log.Println("before pipe")
 		pipe <- s
 	}
 
@@ -146,20 +130,11 @@ func render(in io.Reader) {
 	}
 }
 
-func Hex(scol string, contrast uint8) (color.RGBA, error) {
-	format := "#%02x%02x%02x"
-	if len(scol) == 4 {
-		format = "#%1x%1x%1x"
-	}
+func Signal(sigs ...os.Signal) chan os.Signal {
+	// TODO(sigsetup) better for this to be a named function so it's clear what's happening
+	sig := make(chan os.Signal)
 
-	var r, g, b uint8
-	n, err := fmt.Sscanf(scol, format, &r, &g, &b)
-	if err != nil {
-		return color.RGBA{}, err
-	}
-	if n != 3 {
-		return color.RGBA{}, fmt.Errorf("color: %v is not a hex-color", scol)
-	}
-
-	return color.RGBA{r * contrast, g * contrast, b * contrast, 0x00}, nil
+	//Setup signal handling for clean shutdown
+	signal.Notify(sig, sigs...)
+	return sig
 }

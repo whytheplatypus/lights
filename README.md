@@ -1,10 +1,24 @@
-# Lights
+use 'godoc cmd/github.com/whytheplatypus/lights' for documentation on the github.com/whytheplatypus/lights command 
 
-A good keyboard fx manager should
-trigger draws only on events
-(unless animation is involved).
-Keys should be easy to reference
-as should their color.
-It should be able to adjust different regions of keys
-and update them independently.
-Or at least give the appearance of independence.
+
+
+#Notes
+
+##Todos
+
+- [ ] this panics and only reports info about -v, need this and any info about
+commands?
+
+
+- [ ] clean this error text up
+
+
+- [ ] dup of line 63-68
+
+
+- [ ] this should go at either the bottom or top of the file for easy location
+
+
+
+
+
