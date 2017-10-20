@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -27,19 +28,36 @@ var (
 	Subcmds = CmdRegistry{}
 )
 
-func init() {
-	var verbose bool
-	flag.BoolVar(&verbose, "v", false, "Enable for verbose logging")
+func main() {
+	Subcmds.Register("render", &commands.Renderer{})
+	Subcmds.Register("clear", &commands.Clear{})
+	Subcmds.Register("version", RunFunc(func(args []string) error {
+		fmt.Println(Description())
+		return nil
+	}))
 
-	//TODO(parsepanic): this panics and only reports info about -v, need this and
-	// any info about commands?
-	flag.Parse()
+	var verbose bool
+	cmdFlag := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	cmdFlag.BoolVar(&verbose, "v", false, "Enable for verbose logging")
+	if err := cmdFlag.Parse(os.Args[1:]); err != nil {
+		Subcmds.Usage()
+		os.Exit(1)
+	}
 
 	if verbose {
 		log.SetFlags(log.Lshortfile | log.LstdFlags)
 	} else {
 		log.SetOutput(ioutil.Discard)
 	}
+
+	args := flag.Args()
+
+	if err := Subcmds.Run(args); err != nil {
+		Subcmds.Usage()
+		os.Exit(1)
+	}
+
+	os.Exit(0)
 }
 
 type Runnable interface {
@@ -61,50 +79,26 @@ func (c CmdRegistry) Register(name string, cmd Runnable) {
 	c[name] = cmd
 }
 
+var ErrCommandNotFound = errors.New("no subcommand registered with that name")
+var ErrNoSubcommandSupplied = errors.New("no subcommand supplied")
+
 func (c CmdRegistry) Run(args []string) error {
 	if len(args) < 1 {
-		//TODO(baderrtxt) clean this error text up
-		var s string
-		for key, _ := range Subcmds {
-			s = fmt.Sprintf("%s\n%s", s, key)
-		}
-		return fmt.Errorf("Commands: %s", s)
+		return ErrNoSubcommandSupplied
 	}
 	cn, args := args[0], args[1:]
 	cmd, ok := Subcmds[cn]
 	if !ok {
-		//TODO(dupnotfounderr) dup of line 63-68
-		var s string
-		for key, _ := range Subcmds {
-			s = fmt.Sprintf("%s\n%s", s, key)
-		}
-		return fmt.Errorf("Commands: %s", s)
+		return ErrCommandNotFound
 	}
 	return cmd.Run(args)
 }
 
-// TODO(mainpos) this should go at either the bottom or top of the file for easy location
-func main() {
-
-	Subcmds.Register("render", &commands.Renderer{})
-	Subcmds.Register("clear", &commands.Clear{})
-	Subcmds.Register("version", RunFunc(func(args []string) error {
-		fmt.Println(Description())
-		return nil
-	}))
-
-	if !flag.Parsed() {
-		flag.Parse()
+func (c CmdRegistry) Usage() {
+	fmt.Println("Subcommands: ")
+	for key, _ := range c {
+		fmt.Printf("%s\n", key)
 	}
-
-	args := flag.Args()
-
-	err := Subcmds.Run(args)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	os.Exit(0)
 }
 
 // Description returns a string describing the binary build

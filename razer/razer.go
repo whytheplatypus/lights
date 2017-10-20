@@ -3,9 +3,14 @@ package razer
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"image/color"
 	"io"
 	"log"
+	"strconv"
+	"strings"
+
+	"golang.org/x/image/colornames"
 
 	"github.com/godbus/dbus"
 )
@@ -170,6 +175,13 @@ func GetDeviceName(name string, conn *dbus.Conn) (string, error) {
 	return s, c.Err
 }
 
+func GetDeviceType(name string, conn *dbus.Conn) (string, error) {
+	var s string
+	c := conn.Object("org.razer", dbus.ObjectPath("/org/razer/device/"+name)).Call("razer.device.misc.getDeviceType", 0)
+	c.Store(&s)
+	return s, c.Err
+}
+
 func GetMatrixDimensions(name string, conn *dbus.Conn) ([]int32, error) {
 	var m []int32
 	err := conn.Object(
@@ -180,4 +192,87 @@ func GetMatrixDimensions(name string, conn *dbus.Conn) ([]int32, error) {
 		0,
 	).Store(&m)
 	return m, err
+}
+
+func GetKeyboards(conn *dbus.Conn) []string {
+	result := []string{}
+	for _, dev := range DeviceList {
+		if t, _ := GetDeviceType(dev, conn); "keyboard" == t {
+			result = append(result, dev)
+		}
+	}
+	return result
+}
+
+func UnmarshalString(line string, keyboard map[string][]struct{ Col, Row uint8 }, s *Set) error {
+	if s.Rows == nil {
+		s.Rows = []*Row{}
+	}
+	keys := strings.Split(line, ",")
+	for _, key := range keys {
+		parts := strings.Split(key, ":")
+		c, parts := parts[len(parts)-1], parts[:len(parts)-1]
+		crgba, ok := colornames.Map[c]
+		if !ok {
+			var err error
+			crgba, err = Hex(c, 3)
+			if err != nil {
+				log.Println("Could not render color", c, err)
+				continue
+			}
+		}
+		color := &RGBA{crgba}
+
+		switch l := len(parts); l {
+		case 1:
+			if locs, ok := keyboard[parts[0]]; ok {
+				//set key
+				for _, loc := range locs {
+					s.Rows = append(s.Rows, &Row{
+						Num:   loc.Row,
+						Start: loc.Col,
+						Colors: []Color{
+							color,
+						},
+					})
+				}
+			}
+		case 2:
+			c, err := strconv.Atoi(parts[0])
+			if err != nil {
+				continue
+			}
+			r, err := strconv.Atoi(parts[1])
+			if err != nil {
+				continue
+			}
+
+			s.Rows = append(s.Rows, &Row{
+				Num:   uint8(r),
+				Start: uint8(c),
+				Colors: []Color{
+					color,
+				},
+			})
+		}
+	}
+	return nil
+}
+
+func Hex(scol string, contrast uint8) (color.RGBA, error) {
+	format := "#%02x%02x%02x"
+	if len(scol) == 4 {
+		format = "#%1x%1x%1x"
+	}
+
+	var r, g, b uint8
+	n, err := fmt.Sscanf(scol, format, &r, &g, &b)
+	if err != nil {
+		return color.RGBA{}, err
+	}
+	if n != 3 {
+		return color.RGBA{}, fmt.Errorf("color: %v is not a hex-color", scol)
+	}
+
+	return color.RGBA{r * contrast, g * contrast, b * contrast, 0x00}, nil
 }

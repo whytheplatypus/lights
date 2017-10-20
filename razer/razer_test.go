@@ -15,8 +15,18 @@ func TestDevices(t *testing.T) {
 
 func TestGetDeviceName(t *testing.T) {
 	dev := razer.DeviceList[0]
-	_, err := razer.GetDeviceName(dev, razer.Conn)
+	s, err := razer.GetDeviceName(dev, razer.Conn)
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Log(s)
+}
+
+func TestGetDeviceType(t *testing.T) {
+	dev := razer.DeviceList[0]
+	s, err := razer.GetDeviceType(dev, razer.Conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(s)
 }
